@@ -1,7 +1,6 @@
 import io
 import os
 from tkinter import messagebox
-from matplotlib import pyplot as plt
 from connect import con
 from PIL import Image
 
@@ -61,10 +60,3 @@ def un(checkboxes):
         print(f"Decompressed Image Name: {decompressed_image_name}\n")
         print(f"Decompressed Size: {decompressed_size / (1024 ** 2):.2f} MB\n")
 
-        # # Hiển thị ảnh đã giải nén
-        # plt.imshow(img)
-        # plt.axis('off')  # Tắt trục tọa độ
-        # plt.show()
-
-    cursor.close()
-    conn.close()
