@@ -9,7 +9,7 @@ from connect import con
 
 def compress_and_store_image(image_path):  
     conn, cursor = con()
-    # Tạo bảng compressed_images nếu chưa có
+    # Tạo bảng compressed_images nếu chưa tồn tại
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS compressed_images (
         id SERIAL PRIMARY KEY,
@@ -17,7 +17,6 @@ def compress_and_store_image(image_path):
         data BYTEA
     )
     """)
-
     # Lấy tên tệp
     image_name = os.path.basename(image_path)
     # Lấy dung lượng ảnh trước khi nén
@@ -34,6 +33,7 @@ def compress_and_store_image(image_path):
 
     try:
         with Image.open(image_path) as img:
+            
             # Nén ảnh
             # JPEG 2000
             start_time_1 = time.time()
@@ -45,9 +45,9 @@ def compress_and_store_image(image_path):
 
             # LZW
             start_time_2 = time.time()
-            img_byte_arr_lzw = io.BytesIO()
+            img_byte_arr_lzw = io.BytesIO()           
             new_image_name_lzw = image_name.rsplit('.', 1)[0] + '.tiff'
-            img.save(img_byte_arr_lzw, format='TIFF', compression='tiff_lzw', quality_mode='dB', quality_layers=[20])
+            img.save(img_byte_arr_lzw, format='TIFF', compression='tiff_lzw')
             img_byte_arr_lzw = img_byte_arr_lzw.getvalue()
             end_time_2 = time.time()
 
@@ -55,7 +55,7 @@ def compress_and_store_image(image_path):
             start_time_3 = time.time()
             img_byte_arr_png = io.BytesIO()
             new_image_name_png = image_name.rsplit('.', 1)[0] + '.png'
-            img.save(img_byte_arr_png, format='PNG', quality_mode='dB', quality_layers=[20])
+            img.save(img_byte_arr_png, format='PNG')
             img_byte_arr_png = img_byte_arr_png.getvalue()
             end_time_3 = time.time()
 
@@ -88,31 +88,6 @@ def compress_and_store_image(image_path):
         """, (x, psycopg2.Binary(y)))    
     conn.commit()
 
-    # Vẽ biểu đồ so sánh dung lượng nén với dung lượng ban đầu
-    compression_methods = ['JPEG 2000', 'LZW', 'PNG']
-    compressed_size_mb = [size / (1024 ** 2) for size in compressed_size]  # Dung lượng nén (MB)
-    original_size_mb = original_size / (1024 ** 2)  # Dung lượng ban đầu (MB)
-
-    plt.figure(figsize=(10, 12))  # Tạo không gian cho cả hai biểu đồ
-
-    # Biểu đồ dung lượng nén so với dung lượng ban đầu
-    plt.subplot(2, 1, 1)  # Tạo biểu đồ trên cùng
-    plt.bar(compression_methods, compressed_size_mb, color=['blue', 'green', 'orange'], label='Compressed Size (MB)')
-    plt.axhline(y=original_size_mb, color='red', linestyle='--', label='Original Size (MB)')
-    plt.title('Comparison of Compressed Sizes and Original Size')
-    plt.ylabel('Size (MB)')   
-    plt.legend()
-
-    # Biểu đồ thời gian nén
-    plt.subplot(2, 1, 2)  # Tạo biểu đồ phía dưới (chỉnh thành 2, 1, 2)
-    plt.bar(compression_methods, compression_time, color=['blue', 'green', 'orange'])
-    plt.title('Compression Time Comparison')
-    plt.ylabel('Time (seconds)')
-    
-    # Hiển thị biểu đồ
-    plt.tight_layout()
-    plt.show()
-
     # In thông tin        
     print(f"Image name before compression: {image_name}\n",
             f"Original Size: {original_size / (1024 ** 2):.2f} MB\n"                           
@@ -128,4 +103,28 @@ def compress_and_store_image(image_path):
             f"Image name after compression: {new_image_name_png}\n"
             f"Compressed Size 3: {compressed_size[2] / (1024 ** 2):.2f} MB\n"
             f"Compression Time 3: {compression_time[2]:.2f} seconds")
-    
+
+    # Vẽ biểu đồ so sánh dung lượng nén với dung lượng ban đầu
+    compression_methods = ['JPEG 2000', 'LZW', 'PNG']
+    compressed_size_mb = [size / (1024 ** 2) for size in compressed_size]  # Dung lượng nén (MB)
+    original_size_mb = original_size / (1024 ** 2)  # Dung lượng ban đầu (MB)
+
+    plt.figure(figsize=(16, 8))  # Tăng kích thước của biểu đồ
+
+    # Biểu đồ dung lượng nén so với dung lượng ban đầu
+    plt.subplot(1, 2, 1)  # Tạo biểu đồ trên cùng
+    plt.bar(compression_methods, compressed_size_mb, color=['blue', 'green', 'orange'])
+    plt.axhline(y=original_size_mb, color='red', linestyle='-', label='Original Size (MB)')
+    plt.title('Comparison of Compressed Sizes and Original Size')
+    plt.ylabel('Size (MB)')   
+    plt.legend()
+
+    # Biểu đồ thời gian nén
+    plt.subplot(1, 2, 2)  # Tạo biểu đồ phía dưới
+    plt.bar(compression_methods, compression_time, color=['blue', 'green', 'orange'])
+    plt.title('Compression Time Comparison')
+    plt.ylabel('Time (seconds)')
+
+    # Hiển thị biểu đồ
+    plt.tight_layout()
+    plt.show()
