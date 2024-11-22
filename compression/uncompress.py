@@ -1,8 +1,9 @@
-import io
 import os
+import io
+from PIL import Image
+import rasterio
 from tkinter import messagebox
 from connect import con
-from PIL import Image
 
 def un(checkboxes):
     conn, cursor = con()
@@ -28,35 +29,61 @@ def un(checkboxes):
 
     # Lấy tên ảnh và dữ liệu đã nén
     image_name, image_data = result
-    
+    extension = image_name.rsplit('.', 1)[-1].lower()  # Lấy phần mở rộng file
+
     # Đường dẫn và tên file mới sau khi giải nén
-    new_image_name = image_name.rsplit('.', 1)[0] + '.TIF'
-    decompressed_image_name = f"decompressed_{new_image_name}"
+    new_image_name = image_name.rsplit('.', 1)[0] + '_decompressed.TIF'
+    output_path = os.path.join(output_folder, new_image_name)
 
-    # Tạo đối tượng BytesIO từ dữ liệu đã nén
-    img_byte_arr = io.BytesIO(image_data)
+    try:
+        if extension in ['jp2', 'jpeg2000']:
+            # Giải nén JPEG 2000 bằng Pillow
+            img_byte_arr = io.BytesIO(image_data)
+            with Image.open(img_byte_arr) as img:
+                img.save(output_path, format='TIFF')
+        
+        elif extension == 'tiff':
+            # Giải nén TIFF (LZW) bằng Rasterio
+            img_byte_arr = io.BytesIO(image_data)
+            with rasterio.open(img_byte_arr) as src:
+                profile = src.profile
+                data = src.read()
 
-    # Mở ảnh từ đối tượng BytesIO
-    with Image.open(img_byte_arr) as img:
-        # Đường dẫn nơi lưu ảnh đã giải nén
-        output_path = os.path.join(output_folder, new_image_name)
-        
-        # Lưu ảnh đã giải nén ra file (có nén bằng LZW)
-        img.save(output_path, format='TIFF', compression='tiff_lzw')
-        
-        # Lấy dung lượng ban đầu (trong cơ sở dữ liệu)
+                # Cập nhật profile cho ảnh đã giải nén
+                profile.update(driver='GTiff', compress=None)  # Không nén ảnh
+
+                # Lưu ảnh đã giải nén ra file
+                with rasterio.open(output_path, 'w', **profile) as dst:
+                    dst.write(data)
+
+        elif extension == 'png':
+            # Giải nén PNG bằng Pillow
+            img_byte_arr = io.BytesIO(image_data)
+            with Image.open(img_byte_arr) as img:
+                img.save(output_path, format='TIFF')
+
+        else:
+            messagebox.showinfo("Error", f"Unsupported file format: {extension}")
+            return
+
+        # Lấy dung lượng ban đầu từ cơ sở dữ liệu
         original_size = len(image_data)
-        
+
         # Lấy dung lượng sau khi giải nén
         decompressed_size = os.path.getsize(output_path)
 
         # Thông báo hoàn thành
-        messagebox.showinfo("Decompressed Image Complete", 
-                            f"Image {decompressed_image_name} has been decompressed and saved at {output_path}")
+        messagebox.showinfo(
+            "Decompressed Image Complete",
+            f"Image {new_image_name} has been decompressed and saved at {output_path}"
+        )
 
         # In thông tin
         print(f"Original Image Name: {image_name}\n")
         print(f"Original Size: {original_size / (1024 ** 2):.2f} MB\n")
-        print(f"Decompressed Image Name: {decompressed_image_name}\n")
+        print(f"Decompressed Image Name: {new_image_name}\n")
         print(f"Decompressed Size: {decompressed_size / (1024 ** 2):.2f} MB\n")
 
+    except Exception as e:
+        messagebox.showinfo("Error", f"Failed to decompress image {image_name}: {e}")
+        print(f"Error decompressing image: {e}")
